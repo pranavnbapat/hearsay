@@ -1,0 +1,45 @@
+# VCS & IDE
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual envs
+.env
+.venv/
+env/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Your temp and big files
+temp/
+*.log
+
+# Ignore heavy docs/data by default
+*.xls
+*.xlsx
+*.pdf
+*.doc
+*.docx
+*.json
+*.txt
+
+# Keep these even with the above ignores:
+!requirements.txt
+
+input/
+output/
