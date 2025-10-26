@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     UVICORN_PORT: int = 8000
     CORS_ALLOW_ORIGINS: str = "*"
 
+    AUTH_USERNAME: str = "admin"
+    AUTH_PASSWORD: str = "K5C5R2wRPb6cKcU1"
+
     @property
     def cors_origins_list(self) -> List[str]:
         s = (self.CORS_ALLOW_ORIGINS or "").strip()

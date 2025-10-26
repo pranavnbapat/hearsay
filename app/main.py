@@ -1,7 +1,9 @@
 # app/main.py
 
+import base64
 import logging
 import os
+import secrets
 import shutil
 
 import aiofiles
@@ -10,11 +12,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from textwrap import dedent
 
-from fastapi import FastAPI, UploadFile, Form, HTTPException, BackgroundTasks, File
+from fastapi import FastAPI, UploadFile, Form, HTTPException, BackgroundTasks, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core.auth import verify_basic_auth
 from app.core.config import settings
 from app.models.schemas import TranscriptionResponse, Segment
 from app.services.media import is_audio, is_video, extract_audio_to_m4a
@@ -85,6 +88,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def basic_auth_middleware(request: Request, call_next):
+    """
+    Basic HTTP Authentication for all non-public routes.
+    Credentials are taken from .env (AUTH_USERNAME / AUTH_PASSWORD).
+    """
+    public_paths = {
+        "/"
+    }
+
+    # Allow docs, health, etc.
+    if request.url.path in public_paths:
+        return await call_next(request)
+
+    # Parse the Authorization header
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return JSONResponse(
+            {"detail": "Authentication required"},
+            status_code=401,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    try:
+        scheme, credentials = auth.split(" ", 1)
+        if scheme.lower() != "basic":
+            raise ValueError("Invalid scheme")
+        decoded = base64.b64decode(credentials).decode("utf-8")
+        username, password = decoded.split(":", 1)
+    except Exception:
+        return JSONResponse(
+            {"detail": "Invalid authentication header"},
+            status_code=401,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    # Verify credentials securely (constant-time comparison)
+    if not (
+        secrets.compare_digest(username, settings.AUTH_USERNAME)
+        and secrets.compare_digest(password, settings.AUTH_PASSWORD)
+    ):
+        return JSONResponse(
+            {"detail": "Invalid credentials"},
+            status_code=401,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    # Continue if valid
+    return await call_next(request)
 
 def ensure_dirs():
     TMP_DIR.mkdir(exist_ok=True)
