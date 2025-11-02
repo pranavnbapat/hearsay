@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # DeepL
     DEEPL_API_KEY: Optional[str] = None
 
-    # Max upload size (bytes) – you can enforce at reverse proxy too
+    # Max upload size (bytes)
     MAX_UPLOAD_BYTES: int = 500 * 1024 * 1024  # 500 MB
 
     # YT-DLP extractor tweak for SABR issues; set "" to disable

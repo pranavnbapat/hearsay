@@ -25,7 +25,7 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Your temp and big files
+# Temp and big files
 temp/
 *.log
 

@@ -1,0 +1,28 @@
+services:
+  hearsay:
+    container_name: hearsay
+    build:
+      context: .
+    image: ghcr.io/pranavnbapat/hearsay:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - GUNICORN_CMD_ARGS=--timeout 120
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/creds/google.json
+    user: "${UID}:${GID}"
+    ports:
+      - "10000:10000"
+    volumes:
+      - hearsay_cache:/cache
+      - ./workdir:/app/workdir
+      - ./hearsay-476309-545070b65d99.json:/app/creds/google.json:ro
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:10000/healthz" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  hearsay_cache:

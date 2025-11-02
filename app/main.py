@@ -90,27 +90,15 @@ app.add_middleware(
 
 @app.middleware("http")
 async def basic_auth_middleware(request: Request, call_next):
-    """
-    Basic HTTP Authentication for all non-public routes.
-    Credentials are taken from .env (AUTH_USERNAME / AUTH_PASSWORD).
-    """
-    public_paths = {
-        "/"
-    }
-
-    # Allow docs, health, etc.
-    if request.url.path in public_paths:
+    # Allow CORS preflights through
+    if request.method == "OPTIONS":
         return await call_next(request)
 
-    # Parse the Authorization header
+    # --- Basic Auth for EVERYTHING else ---
     auth = request.headers.get("Authorization")
     if not auth:
-        return JSONResponse(
-            {"detail": "Authentication required"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Basic"},
-        )
-
+        return JSONResponse({"detail": "Authentication required"}, status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="HearSay"'})
     try:
         scheme, credentials = auth.split(" ", 1)
         if scheme.lower() != "basic":
@@ -118,24 +106,12 @@ async def basic_auth_middleware(request: Request, call_next):
         decoded = base64.b64decode(credentials).decode("utf-8")
         username, password = decoded.split(":", 1)
     except Exception:
-        return JSONResponse(
-            {"detail": "Invalid authentication header"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Basic"},
-        )
-
-    # Verify credentials securely (constant-time comparison)
-    if not (
-        secrets.compare_digest(username, settings.AUTH_USERNAME)
-        and secrets.compare_digest(password, settings.AUTH_PASSWORD)
-    ):
-        return JSONResponse(
-            {"detail": "Invalid credentials"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Basic"},
-        )
-
-    # Continue if valid
+        return JSONResponse({"detail": "Invalid authentication header"}, status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="HearSay"'})
+    if not (secrets.compare_digest(username, settings.AUTH_USERNAME)
+            and secrets.compare_digest(password, settings.AUTH_PASSWORD)):
+        return JSONResponse({"detail": "Invalid credentials"}, status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="HearSay"'})
     return await call_next(request)
 
 def ensure_dirs():
