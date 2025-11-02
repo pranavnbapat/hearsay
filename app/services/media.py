@@ -38,3 +38,20 @@ def extract_audio_to_m4a(input_path: Path, output_path: Path) -> Path:
     ]
     subprocess.run(cmd, check=True)
     return output_path
+
+def download_direct_audio(url: str, out_path: Path) -> Path:
+    """
+    Download/record audio from a direct media URL (mp3/mp4/webm/m3u8, etc.)
+    and normalise to m4a. This is NOT for YouTube pages.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # -vn drops video, we set mono 16kHz AAC ~96kbps for your STT
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", url,
+        "-vn", "-ac", "1", "-ar", "16000",
+        "-c:a", "aac", "-b:a", "96k",
+        str(out_path)
+    ]
+    subprocess.run(cmd, check=True)
+    return out_path

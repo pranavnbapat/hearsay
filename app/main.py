@@ -45,8 +45,11 @@ It auto-detects the spoken language and can translate to English.
 
 ---
 """)
-  
-TMP_DIR = Path("workdir")
+
+# --- ABSOLUTE paths to avoid PermissionError with bind mounts ---
+BASE_DIR = Path("/app")  # container base
+TMP_DIR = Path(os.getenv("WORKDIR", "/app/workdir"))
+# TMP_DIR = Path("workdir")
 UPLOAD_DIR = TMP_DIR / "uploads"
 YT_DIR = TMP_DIR / "yt"
 
@@ -115,7 +118,7 @@ async def basic_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 def ensure_dirs():
-    TMP_DIR.mkdir(exist_ok=True)
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     YT_DIR.mkdir(parents=True, exist_ok=True)
 

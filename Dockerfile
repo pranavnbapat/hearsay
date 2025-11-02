@@ -27,6 +27,7 @@ WORKDIR /app
 # Python deps
 COPY requirements.txt ./
 RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --upgrade yt-dlp && \
     pip install --no-cache-dir -r requirements.txt
 
 # App code

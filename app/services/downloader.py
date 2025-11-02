@@ -1,9 +1,12 @@
 # app/services/downloader.py
 
+import os
 import re
 import subprocess
 
 from pathlib import Path
+from shutil import copyfile
+from tempfile import gettempdir
 
 from urllib.parse import urlparse, parse_qs
 
@@ -15,6 +18,15 @@ _YT_ID_RE = re.compile(
     ([0-9A-Za-z_-]{11})                                        # capture the 11-char ID
     """,
     re.VERBOSE,
+)
+
+COOKIES_PATH = os.getenv("YTDLP_COOKIES")
+
+# A realistic mobile UA helps avoid bot checks on some DC IP ranges
+MOBILE_UA = (
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/123.0 Mobile Safari/537.36"
 )
 
 
@@ -39,6 +51,21 @@ def _parse_yt_time(t: str) -> int:
         if digits:
             total = int(digits[0])
     return total
+
+
+def _writable_cookies_path(src: str | None) -> str | None:
+    """
+    If a cookies.txt is provided (read-only bind), copy it to a tmp path so yt-dlp
+    can write back updated cookies without failing on RO filesystem.
+    """
+    if not src or not os.path.isfile(src):
+        return None
+    dst = os.path.join(gettempdir(), "ytdlp_cookies.txt")
+    try:
+        copyfile(src, dst)  # overwrite if exists
+        return dst
+    except Exception:
+        return src  # fall back to original (may be read-only)
 
 
 def parse_youtube_value(value: str) -> tuple[str, int | None]:
@@ -109,21 +136,56 @@ def download_youtube_best_audio(youtube_value: str, out_dir: Path) -> Path:
 
     out_tmpl = str(out_dir / "%(title)s_%(id)s.%(ext)s")
 
+    cookiefile = _writable_cookies_path(COOKIES_PATH)
+    using_cookies = bool(cookiefile and os.path.isfile(cookiefile))
+
+    extractor_args = (
+            (settings.YT_EXTRACTOR_ARGS or "").strip()
+            or (
+                "youtube:player_client=web,ios,mweb;player_skip=webpage"
+                if using_cookies
+                else "youtube:player_client=android,web,ios,mweb;player_skip=webpage"
+            )
+    )
+
     cmd = [
         "yt-dlp",
         "-f", "bestaudio/best",
         "-x", "--audio-format", "m4a",
         "-o", out_tmpl,
-        url,
+        "--extractor-args", extractor_args,
+        "--user-agent", MOBILE_UA,
+        "--add-header", "Accept-Language: en-GB,en;q=0.9",
+        "--force-ipv4",
+        "--no-playlist",
+        "--geo-bypass",
+        "--retries", "5",
+        "--fragment-retries", "5",
+        "--sleep-requests", "1",
     ]
-    if settings.YT_EXTRACTOR_ARGS:
-        cmd += ["--extractor-args", settings.YT_EXTRACTOR_ARGS]
+
+    # Optional: only if a cookies file is mounted and readable (keeps default cookie-less)
+    if using_cookies:
+        cmd += ["--cookies", cookiefile]
 
     if start_sec is not None and start_sec > 0:
-        # Download from start_sec to end
         cmd += ["--download-sections", f"*{start_sec}-"]
 
-    subprocess.run(cmd, check=True)
+    cmd.append(url)
+
+    try:
+        _ = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        msg = (e.stderr or e.stdout or str(e)).strip()
+        # normalise apostrophes for matching
+        low = msg.lower()
+        if "confirm you’re not a bot" in low or "confirm you're not a bot" in low:
+            raise ValueError(
+                "YouTube requires human verification from this server. "
+                "Retry later, provide cookies.txt, or change egress IP."
+            )
+        # propagate real yt-dlp message up to FastAPI
+        raise ValueError(msg) from e
 
     candidates = sorted(out_dir.glob(f"*_{vid}.m4a"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:
